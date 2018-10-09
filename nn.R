@@ -11,8 +11,6 @@
   #testDataX <- t(testData[,-1])
   #testDataY <- t(testData[,1])
 
-  # source("lbfgsb3_.R")
-
   # Read in training data
   trainData <- read.csv("train.csv")
   trainDataX <- t(head(trainData, 42000)[,-1])
@@ -48,7 +46,7 @@
       numTrainingExamples <- ncol(predictedY)
       
       # Compute the cost function
-      cost <- -1*sum(rowSums(log(predictedY)*Y + log(1-predictedY)*(1-Y))) + lambda/(2*numTrainingExamples) * (sum(rowSums(theta1 %*% t(theta1))) + sum(rowSums(theta2 %*% t(theta2))))
+      cost <- -1*sum(rowSums(log(predictedY)*Y + log(1-predictedY)*(1-Y))) + lambda/(2*numTrainingExamples) * (sum(theta1 %*% t(theta1)) + sum(theta2 %*% t(theta2)))
 
       return(cost)
     }
@@ -78,21 +76,9 @@
       return(c(as.vector(D1), as.vector(D2)))
     }
   }
+  
+  # TODO: rewrite this
   computeNumericalGradient <- function(J, theta) {
-    #COMPUTENUMERICALGRADIENT Computes the gradient using "finite differences"
-    #and gives us a numerical estimate of the gradient.
-    #   numgrad <- COMPUTENUMERICALGRADIENT(J, theta) computes the numerical
-    #   gradient of the  J  around theta. Calling y <- function(theta) should 
-    #   return the function value at theta.
-    
-    # Notes: The following code implements numerical gradient checking, and
-    #        returns the numerical gradient.It sets numgrad[i] to (a numerical
-    #        approximation of) the partial derivative of J with respect to the
-    #        i-th input argument, evaluated at theta. (i.e., numgrad[i] should
-    #        be the (approximately) the partial derivative of J with respect
-    #        to theta[i].)
-    #
-    
     numgrad <- rep(0,length(theta))
     perturb <- rep(0,length(theta))
     e <- 1e-4
@@ -109,56 +95,55 @@
     numgrad
   }
   
+  initTheta <- function () {
+    # Randomly initialize weights for each layer
+    # See the following: https://web.stanford.edu/class/ee373b/nninitialization.pdf
+    
+    # Randomly initialize weights for layer 1
+    numActivationUnits1 <- 785 # Includes bias unit
+    numActivationUnits2 <- 784 # Does not include bias unit
+    epsilon1 <- sqrt(6)/sqrt(numActivationUnits2 + numActivationUnits1)
+    theta1 <- 2*epsilon1*matrix(runif(numActivationUnits2*numActivationUnits1, min=0, max=1), numActivationUnits2, numActivationUnits1) - epsilon1
+    
+    # Randomly initialize weights for layer 2
+    numActivationUnits2 <- 785 # Includes bias unit
+    numActivationUnits3 <- 10 # Does not include bias unit
+    epsilon2 <- sqrt(6)/sqrt(numActivationUnits3 + numActivationUnits2)
+    theta2 <- 2*epsilon2*matrix(runif(numActivationUnits3*numActivationUnits2, min=0, max=1), numActivationUnits3, numActivationUnits2) - epsilon2
+    
+    
+    theta <- c(as.vector(theta1), as.vector(theta2)) # Unrolled theta parameters
+  }
+  
   # ----------------
   # Orchestration
   # ----------------
   
-  # Randomly initialize weights for each layer
-  # See the following: https://web.stanford.edu/class/ee373b/nninitialization.pdf
-  
-  # Randomly initialize weights for layer 1
-  numActivationUnits1 <- 785 # Includes bias unit
-  numActivationUnits2 <- 784 # Does not include bias unit
-  epsilon1 <- sqrt(6)/sqrt(numActivationUnits2 + numActivationUnits1)
-  theta1 <- 2*epsilon1*matrix(runif(numActivationUnits2*numActivationUnits1, min=0, max=1), numActivationUnits2, numActivationUnits1) - epsilon1
-  
-  # Randomly initialize weights for layer 2
-  numActivationUnits2 <- 785 # Includes bias unit
-  numActivationUnits3 <- 10 # Does not include bias unit
-  epsilon2 <- sqrt(6)/sqrt(numActivationUnits3 + numActivationUnits2)
-  theta2 <- 2*epsilon2*matrix(runif(numActivationUnits3*numActivationUnits2, min=0, max=1), numActivationUnits3, numActivationUnits2) - epsilon2
   
   # Gradient Descent
   lambda <- 5
-  init_theta <- c(as.vector(theta1), as.vector(theta2)) # Unrolled theta parameters
+  theta <- initTheta()
+  # Convert trainDataY to trainDataYBinary, so that it's a vector with 1 at the index of the respective digit label
   
-  trainDataYmodified <- matrix(0, 10, length(trainDataY))
+  trainDataYBinary <- matrix(0, 10, length(trainDataY))
   for (i in c(1:length(trainDataY))) {
     for (j in c(0:9)) {
-      trainDataYmodified[j + 1, i] = 1*(trainDataY[i]==j)
+      trainDataYBinary[j + 1, i] = 1*(trainDataY[i]==j)
     }
   }
   
-  fn <- costFunction(trainDataX, trainDataYmodified, lambda)
-  gr <- gradFunction(trainDataX, trainDataYmodified, lambda)
+  fn <- costFunction(trainDataX, trainDataYBinary, lambda)
+  gr <- gradFunction(trainDataX, trainDataYBinary, lambda)
   
-  #grad = gr(init_theta);
-  #print(grad)
-  #numgrad = computeNumericalGradient(fn, init_theta)
-  #diff <- norm(as.matrix(numgrad - grad)) / norm(as.matrix(numgrad + grad))
-  #print(diff)
+  result <- optim(par = theta, fn, gr, method="L-BFGS-B", control=list(maxit=500, trace=4))
   
-  # After you have completed the assignment, change the maxit to a larger
-  # value to see how more training helps.
-  
-  
-  
-  result <- optim(par = init_theta, fn, gr, method="L-BFGS-B", control=list(maxit=500, trace=4))
-  
-  # Test using testing data
-  # Pass X, theta1 and theta2 to feedforward propagation
-  # Get back a3
-  # Get max probability of a3
   write.csv(result$par, file="theta.csv")
   
   print(result)
+  
+  # Gradient checking
+  # grad = gr(theta);
+  # print(grad)
+  # numgrad = computeNumericalGradient(fn, theta)
+  # diff <- norm(as.matrix(numgrad - grad)) / norm(as.matrix(numgrad + grad))
+  # print(diff)
